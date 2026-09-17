@@ -1,0 +1,23 @@
+# Ambientes virtuais
+venv/
+env/
+.env
+
+# Caches do Python e pytest
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Logs locais
+*.log
+
+# Arquivos temporários de debug
+debug_*.html
+*.txt
+context.json
+api_content.json
+response_api.json
+found_search.js
+search_component.js
+src_component.js
+config_snippet.json
