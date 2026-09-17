@@ -231,3 +231,4 @@ def parse_html_com_beautifulsoup(html_str):
 if __name__ == "__main__":
     coletor = ColetorG1(termo="lgpd", total_paginas=3, itens_por_pagina=10)
     coletor.executar()
+

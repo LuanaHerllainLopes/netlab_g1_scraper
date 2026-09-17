@@ -94,3 +94,4 @@ def test_desduplicacao():
     # A verificação de URLs vistas descarta itens repetidos
     itens_novos = [n for n in noticias if n["url"] not in coletor.urls_vistas]
     assert len(itens_novos) == 0
+
