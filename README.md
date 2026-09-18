@@ -4,6 +4,22 @@ Projeto desenvolvido como solução do desafio técnico para o **Laboratório de
 
 ---
 
+## 📑 Sumário
+
+- [1. Diagnóstico do Código Original](#-1-diagnóstico-do-código-original-por-que-a-rotina-quebrou)
+- [2. Solução Implementada](#-2-solução-implementada)
+- [3. Estrutura do Repositório](#-3-estrutura-do-repositório)
+- [4. Como Instalar e Executar](#-4-como-instalar-e-executar)
+- [5. Testes Automatizados](#-5-testes-automatizados)
+- [6. Avaliação da Qualidade dos Dados (7 Dimensões)](#-6-avaliação-da-qualidade-dos-dados-7-dimensões)
+  - [Execução da Auditoria](#️-como-executar-a-avaliação-de-qualidade)
+  - [Tabela Consolidada de Resultados](#-tabela-consolidada-de-resultados)
+  - [Detalhamento e Códigos por Dimensão](#-detalhamento-e-código-de-avaliação-por-dimensão)
+- [7. Proposta de Uso de Modelos de Linguagem (LLMs)](#-7-proposta-de-uso-de-modelos-de-linguagem-llms)
+- [8. Limitações e Melhorias Futuras](#️-8-limitações-e-melhorias-futuras)
+
+---
+
 ## 📌 1. Diagnóstico do Código Original (Por que a rotina quebrou?)
 
 Durante a investigação da rotina legada utilizada pela equipe, identificamos os seguintes problemas que causavam a ausência de resultados ou dados corrompidos:
@@ -30,9 +46,29 @@ Durante a investigação da rotina legada utilizada pela equipe, identificamos o
 - **Exportação Estruturada:** Dados salvos simultaneamente em `g1_lgpd.csv` (codificado em UTF-8-SIG para compatibilidade perfeita com Excel) e `g1_lgpd.json`.
 - **Parser Beautiful Soup Incluído:** Função auxiliar `parse_html_com_beautifulsoup` pronta para extrair dados de fragmentos HTML ou caso a renderização ocorra via SSR/Playwright.
 
+## 📁 3. Estrutura do Repositório
+
+A organização dos arquivos e artefatos do projeto segue uma estrutura modular, limpa e rastreável:
+
+```text
+netlab_g1_scraper/
+│
+├── coletor_g1.py            # Coletor principal conectado à API de Busca Headless do G1
+├── test_coletor.py          # Suíte de testes automatizados com pytest (4 testes unitários)
+├── avaliar_qualidade.py     # Script de auditoria das 7 dimensões da qualidade de dados
+│
+├── g1_lgpd.csv              # Base exportada em CSV tabular (codificação UTF-8-SIG para Excel)
+├── g1_lgpd.json             # Base exportada em JSON estruturado e identado
+├── coleta_g1.log            # Arquivo de log detalhado com timestamps e status das requisições
+│
+├── requirements.txt         # Dependências do projeto (requests, beautifulsoup4, pytest)
+├── .gitignore               # Regras de exclusão do Git (ignora venv, caches e temporários)
+└── README.md                # Documentação técnica completa e relatório de engenharia
+```
+
 ---
 
-## 🛠️ 3. Como Instalar e Executar
+## 🛠️ 4. Como Instalar e Executar
 
 ### Pré-requisitos
 - **Git** instalado no sistema
@@ -80,7 +116,7 @@ Os arquivos resultantes serão salvos automaticamente na raiz do projeto:
 
 ---
 
-## 🧪 4. Testes Automatizados
+## 🧪 5. Testes Automatizados
 
 O projeto conta com suíte de testes desenvolvida com **pytest**:
 
@@ -97,7 +133,7 @@ pytest test_coletor.py -v
 
 ---
 
-## 📊 5. Avaliação da Qualidade dos Dados (7 Dimensões)
+## 📊 6. Avaliação da Qualidade dos Dados (7 Dimensões)
 
 Para assegurar a integridade analítica das pesquisas desenvolvidas no **NetLab UFRJ**, os dados gerados pela rotina foram submetidos a uma auditoria rigorosa de qualidade baseada no framework de **7 Dimensões da Qualidade de Dados**, confrontando a saída gerada (`g1_lgpd.json` e `g1_lgpd.csv`) contra uma amostra de referência manual (**Ground Truth**) coletada diretamente da interface do portal G1.
 
@@ -301,7 +337,7 @@ def avaliar_rastreabilidade(self):
 
 ---
 
-## 🤖 6. Proposta de Uso de Modelos de Linguagem (LLMs)
+## 🤖 7. Proposta de Uso de Modelos de Linguagem (LLMs)
 
 ### Onde e como aplicar:
 - **Monitoramento e Auto-cura de Seletores (Watchdog Assíncrono):** A LLM não é inserida no loop de cada requisição (o que geraria lentidão e custos desnecessários). Ela é acionada apenas quando o pipeline detecta uma anomalia (por exemplo, 2 páginas consecutivas retornando 0 notícias).
@@ -311,7 +347,7 @@ def avaliar_rastreabilidade(self):
 
 ---
 
-## ⚠️ 7. Limitações e Melhorias Futuras
+## ⚠️ 8. Limitações e Melhorias Futuras
 1. **Extração do Conteúdo Integral:** Atualmente o scraper coleta os dados presentes na página de busca (título, resumo, data, URL). Uma melhoria futura é adicionar uma etapa secundária para acessar cada URL e raspar o texto completo da matéria.
 2. **Agendamento em Nuvem:** Configuração de um workflow no GitHub Actions para executar a coleta diariamente de forma automática.
 
