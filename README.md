@@ -101,6 +101,13 @@ pytest test_coletor.py -v
 
 Para assegurar a integridade analítica das pesquisas desenvolvidas no **NetLab UFRJ**, os dados gerados pela rotina foram submetidos a uma auditoria rigorosa de qualidade baseada no framework de **7 Dimensões da Qualidade de Dados**, confrontando a saída gerada (`g1_lgpd.json` e `g1_lgpd.csv`) contra uma amostra de referência manual (**Ground Truth**) coletada diretamente da interface do portal G1.
 
+Essa auditoria foi automatizada através do script [`avaliar_qualidade.py`](avaliar_qualidade.py), que audita programaticamente cada uma das 7 dimensões e emite o relatório consolidado de conformidade.
+
+### ⚙️ Como executar a avaliação de qualidade:
+```bash
+python avaliar_qualidade.py
+```
+
 ### 📌 Tabela Consolidada de Resultados
 
 | Dimensão | O que avalia | Procedimento / Como foi feito | Resultado | Status |
