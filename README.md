@@ -345,6 +345,105 @@ def avaliar_rastreabilidade(self):
 - **Prevenção contra Alucinações:** A LLM **não inventa nem extrai notícias**: ela apenas sugere novos seletores CSS/XPath ou parâmetros de consulta em formato JSON estrito (`temperature=0.0`). A extração real dos dados é realizada de forma determinística pelo código Python.
 - **Validação em Sandbox:** Os novos seletores propostos pela LLM são testados automaticamente em uma cópia local do HTML antes de serem aprovados.
 
+### 🧠 Pseudocódigo da Arquitetura de Auto-cura (*Self-Healing Scraper*):
+
+```python
+# ==============================================================================
+# PIPELINE COM WATCHDOG ASSÍNCRONO E AUTO-CURA DE SELETORES VIA LLM
+# ==============================================================================
+
+ALGORITMO PipelineColetorComAutoCura:
+
+    # 1. ESTADO E CONFIGURAÇÃO INICIAL
+    SELETORES_ATUAIS = {
+        "card": "div.widget--info",
+        "titulo": ".widget--info__title",
+        "resumo": ".widget--info__description",
+        "url": "a[href]"
+    }
+    LIMIAR_FALHAS_CONSECUTIVAS = 2
+    contador_falhas = 0
+
+    # 2. LOOP DE COLETA DETERMINÍSTICA (SEM LLM NO CAMINHO CRÍTICO)
+    PARA CADA pagina DE 1 ATÉ total_paginas FAÇA:
+        html_pagina = requisitar_url(url_busca, pagina)
+        noticias = extrair_com_seletores(html_pagina, SELETORES_ATUAIS)
+
+        SE tamanho(noticias) == 0 ENTÃO:
+            contador_falhas = contador_falhas + 1
+            log_aviso(f"Página {pagina} retornou 0 resultados.")
+
+            # DETECÇÃO DE ANOMALIA: Dispara o Watchdog sob suspeita de quebra de layout
+            SE contador_falhas >= LIMIAR_FALHAS_CONSECUTIVAS ENTÃO:
+                log_alerta("Anomalia detectada! Acionando Watchdog com LLM...")
+                
+                novos_seletores = EXECUTAR_WATCHDOG_LLM(html_pagina, SELETORES_ATUAIS)
+
+                SE novos_seletores É VÁLIDO ENTÃO:
+                    SELETORES_ATUAIS = novos_seletores  # Auto-cura (Hot-swap de seletores)
+                    contador_falhas = 0
+                    # Reprocessa a página com os seletores corrigidos
+                    noticias = extrair_com_seletores(html_pagina, SELETORES_ATUAIS)
+                SENÃO:
+                    notificar_engenharia_humana("Falha estrutural não resolvida pela LLM.")
+                    INTERROMPER_LOOP
+        SENÃO:
+            contador_falhas = 0  # Coleta normal
+
+        salvar_registros(noticias)
+
+
+# ==============================================================================
+# SUB-ROTINA: AGENTE DE DIAGNÓSTICO E AUTO-CURA (LLM EM SANDBOX)
+# ==============================================================================
+
+FUNÇÃO EXECUTAR_WATCHDOG_LLM(html_bruto, seletores_falhos):
+
+    # PASSO A: Sanitização de Contexto (Otimização de tokens e privacidade)
+    # Remove scripts, estilos, tags SVG e comentários
+    html_sanitizado = expurgar_tags(html_bruto, tags=["script", "style", "svg", "noscript"])
+    amostra_dom = recortar_regiao_principal(html_sanitizado, max_tamanho=15000_caracteres)
+
+    # PASSO B: Prompt com Saída Estritamente Estruturada (JSON Schema)
+    prompt_sistema = """
+    Você é um Engenheiro de Dados Sênior especialista em web scraping.
+    O portal alterou seu layout e os seletores CSS atuais deixaram de funcionar.
+    Sua tarefa é analisar o fragmento HTML e sugerir NOVOS seletores CSS válidos.
+    NÃO invente notícias ou dados. Retorne APENAS o JSON no formato:
+    {
+        "card": "seletor_css_do_container",
+        "titulo": "seletor_css_do_titulo",
+        "resumo": "seletor_css_do_resumo",
+        "url": "seletor_css_do_link"
+    }
+    """
+
+    # PASSO C: Invocação da LLM com Determinismo Máximo
+    resposta_llm = chamar_api_llm(
+        modelo="gemini-1.5-pro",
+        prompt_sistema=prompt_sistema,
+        prompt_usuario={
+            "seletores_anteriores": seletores_falhos,
+            "html_amostra": amostra_dom
+        },
+        temperatura=0.0,           # Elimina aleatoriedade/criatividade
+        formato_resposta="json"    # Structured Outputs garantido
+    )
+
+    novos_seletores = parse_json(resposta_llm)
+
+    # PASSO D: Validação em Sandbox (Zero Alucinação)
+    # O código Python testa os seletores propostos sobre o HTML antes de aprovar
+    resultado_teste = testar_seletores_em_sandbox(html_bruto, novos_seletores)
+
+    SE resultado_teste.itens_encontrados >= 1 E resultado_teste.titulos_validos ENTÃO:
+        log_sucesso(f"Auto-cura aprovada em Sandbox! Novos seletores: {novos_seletores}")
+        RETORNAR novos_seletores
+    SENÃO:
+        log_erro("Seletores sugeridos pela LLM falharam na validação determinística.")
+        RETORNAR NULO
+```
+
 ---
 
 ## ⚠️ 8. Limitações e Melhorias Futuras
