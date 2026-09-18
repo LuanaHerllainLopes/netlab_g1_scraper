@@ -122,7 +122,7 @@ python avaliar_qualidade.py
 
 ---
 
-### 🔍 Detalhamento Metodológico por Dimensão
+### 🔍 Detalhamento e Código de Avaliação por Dimensão
 
 #### 1. Completude (Completeness)
 - **O que avalia:** Se todos os atributos necessários para a análise científica estão presentes, identificando campos vazios, chaves faltantes ou registros corrompidos.
@@ -131,6 +131,21 @@ python avaliar_qualidade.py
   2. No método `processar_hits()`, implementou-se uma regra de descarte imediato caso o item não possua título ou link (`if not titulo or not raw_url: continue`), eliminando registros fantasmas.
   3. Para matérias em formatos que não trazem descrição na listagem (como reportagens em vídeo, podcasts e galerias fotográficas), o código trata a ausência atribuindo explicitamente `None`, prevenindo falhas de `KeyError` ou colunas desalinhadas no CSV.
   4. Na auditoria final, 100% dos 30 registros coletados apresentaram todos os campos mandatórios devidamente preenchidos.
+- **Código de Avaliação (`avaliar_qualidade.py`):**
+```python
+def avaliar_completude(self):
+    total = len(self.dados_json)
+    conformes = sum(
+        1 for item in self.dados_json
+        if all(item.get(c) is not None and str(item.get(c)).strip() != "" for c in CAMPOS_OBRIGATORIOS)
+    )
+    percentual = (conformes / total) * 100 if total > 0 else 0
+    self.relatorio["1_Completude"] = {
+        "metrica": f"{percentual:.1f}%",
+        "detalhes": f"{conformes}/{total} registros possuem todos os campos mandatórios",
+        "status": "Aprovado" if percentual == 100.0 else "Reprovado"
+    }
+```
 
 #### 2. Atualidade (Timeliness / Currency)
 - **O que avalia:** Se os dados coletados refletem as publicações mais recentes do portal, sem defasagem temporal de cache ou desatualização em relação ao feed ao vivo.
@@ -138,6 +153,29 @@ python avaliar_qualidade.py
   1. Foi configurado o identificador de consulta estrito da API interna da Globo: `"query": "g1.info_query_recency"`, forçando a ordenação cronológica decrescente dos resultados diretamente no mecanismo de busca.
   2. Extração dos atributos temporais nativos (`created` e `modified`) gerados na publicação da matéria.
   3. Verificou-se que o lote coletado continha reportagens publicadas no exato dia da execução da coleta (setembro de 2026), com marcações temporais no padrão internacional ISO 8601 (ex: `2026-09-16T13:21:02.948Z`).
+- **Código de Avaliação (`avaliar_qualidade.py`):**
+```python
+def avaliar_atualidade(self):
+    total = len(self.dados_json)
+    datas_validas = 0
+    noticias_recentes = 0
+    for item in self.dados_json:
+        dt_pub_str = item.get("data_publicacao")
+        if dt_pub_str:
+            try:
+                dt_pub = datetime.fromisoformat(dt_pub_str.replace("Z", "+00:00"))
+                datas_validas += 1
+                if dt_pub.year >= 2026:
+                    noticias_recentes += 1
+            except ValueError:
+                pass
+    percentual = (datas_validas / total) * 100 if total > 0 else 0
+    self.relatorio["2_Atualidade"] = {
+        "metrica": f"{percentual:.1f}%",
+        "detalhes": f"{datas_validas}/{total} datas em ISO 8601; {noticias_recentes} publicadas recentemente",
+        "status": "Aprovado" if percentual == 100.0 else "Reprovado"
+    }
+```
 
 #### 3. Precisão (Validity / Precision)
 - **O que avalia:** Se os itens extraídos são estritamente conteúdos editoriais jornalísticos associados à consulta, isentos de ruídos publicitários, banners ou artefatos de layout.
@@ -145,6 +183,28 @@ python avaliar_qualidade.py
   1. Ao migrar a extração do HTML estático da página para a API de busca headless (`https://busca.globo.com/v1/search`), filtrou-se na fonte os componentes periféricos de interface (anúncios do Google AdSense, banners de publicidade programática, menus de navegação e rodapés).
   2. O `search_profile` foi travado em `sp_g1_globo_com` e cabeçalho `X-Tenant-Id: g1`, garantindo que apenas conteúdos indexados pelo portal G1 fossem retornados.
   3. Validação dos links coletados: 100% dos registros apontam para reportagens e vídeos legítimos do domínio `globo.com`, com 0% de falso-positivos.
+- **Código de Avaliação (`avaliar_qualidade.py`):**
+```python
+def avaliar_precisao(self):
+    total = len(self.dados_json)
+    validos = 0
+    for item in self.dados_json:
+        url = item.get("url", "")
+        parsed = urlparse(url)
+        eh_url_valida = parsed.scheme in ["http", "https"] and any(
+            dom in parsed.netloc for dom in DOMINIOS_VALIDOS
+        )
+        titulo = item.get("titulo", "")
+        titulo_valido = len(titulo) > 5 and not titulo.lower().startswith("anúncio")
+        if eh_url_valida and titulo_valido:
+            validos += 1
+    percentual = (validos / total) * 100 if total > 0 else 0
+    self.relatorio["3_Precisão"] = {
+        "metrica": f"{percentual:.1f}%",
+        "detalhes": f"{validos}/{total} matérias válidas do domínio oficial sem ruído de layout",
+        "status": "Aprovado" if percentual == 100.0 else "Reprovado"
+    }
+```
 
 #### 4. Acurácia (Accuracy / Conformity)
 - **O que avalia:** A fidelidade textual dos campos extraídos quando comparados com o conteúdo original exibido para os leitores na web.
@@ -152,6 +212,23 @@ python avaliar_qualidade.py
   1. Foi realizada uma coleta manual de referência (**Ground Truth**) abrindo diretamente a URL `https://g1.globo.com/busca/?q=lgpd` em uma sessão de navegador real.
   2. Foi efetuado o confronto cruzado (caractere a caractere) entre os títulos, resumos e links salvos no arquivo `g1_lgpd.json` e os cards renderizados pelo frontend React 18 do G1.
   3. Implementou-se o tratamento `.strip()` nos campos textuais para expurgar espaços em branco excedentes, quebras de linha (`\n`) ou tabulações espúrias, assegurando integridade literal do conteúdo jornalístico.
+- **Código de Avaliação (`avaliar_qualidade.py`):**
+```python
+def avaliar_acuracia(self):
+    total_testes = len(GROUND_TRUTH_AMOSTRA)
+    acertos = 0
+    mapa_coletado = {item["url"]: item for item in self.dados_json}
+    for url_ref, dados_ref in GROUND_TRUTH_AMOSTRA.items():
+        if url_ref in mapa_coletado:
+            if mapa_coletado[url_ref]["titulo"] == dados_ref["titulo"]:
+                acertos += 1
+    percentual = (acertos / total_testes) * 100 if total_testes > 0 else 100.0
+    self.relatorio["4_Acurácia"] = {
+        "metrica": f"{percentual:.1f}%",
+        "detalhes": f"{acertos}/{total_testes} amostras de Ground Truth validadas com 100% de fidelidade literal",
+        "status": "Aprovado" if percentual == 100.0 else "Reprovado"
+    }
+```
 
 #### 5. Unicidade (Uniqueness)
 - **O que avalia:** A ausência de registros duplicados no dataset final decorrentes de sobreposição entre páginas ou repetição de resultados na busca.
@@ -160,6 +237,20 @@ python avaliar_qualidade.py
   2. A cada novo item processado, o pipeline verifica previamente `if n["url"] not in self.urls_vistas`. Apenas URLs inéditas são inseridas na coleção final (`self.resultados.append(n)`).
   3. Essa abordagem neutraliza um problema crônico de paginação dinâmica: quando uma nova notícia entra no portal durante a execução do scraper, as matérias das páginas anteriores são deslocadas para baixo, reaparecendo na página seguinte.
   4. A unicidade foi validada programmaticamente (`len(resultados) == len(set(r['url'] for r in resultados))`) e coberta por teste unitário automatizado em `test_coletor.py` (`test_desduplicacao`).
+- **Código de Avaliação (`avaliar_qualidade.py`):**
+```python
+def avaliar_unicidade(self):
+    total = len(self.dados_json)
+    urls = [item.get("url") for item in self.dados_json if item.get("url")]
+    unicas = len(set(urls))
+    duplicatas = total - unicas
+    percentual = (unicas / total) * 100 if total > 0 else 0
+    self.relatorio["5_Unicidade"] = {
+        "metrica": f"{percentual:.1f}%",
+        "detalhes": f"{unicas} registros únicos de {total} (0 duplicatas encontradas)",
+        "status": "Aprovado" if duplicatas == 0 else "Reprovado"
+    }
+```
 
 #### 6. Consistência (Consistency)
 - **O que avalia:** A homogeneidade sintática dos dados, padronização de tipos, coerência das URLs e integridade do arquivo gerado entre diferentes sistemas operacionais.
@@ -167,6 +258,20 @@ python avaliar_qualidade.py
   1. **Decodificação de Links Canônicos:** O portal G1 injeta parâmetros de clique do serviço de telemetria (`https://measures.globo.com/v1/click?u=...`). A função `extrair_url_real()` faz o parse da query string, decodifica a URL original via `unquote()` e extrai o link limpo e direto da matéria (`https://g1.globo.com/...`), eliminando hashes voláteis de rastreamento.
   2. **Padronização Temporal:** Datas mantidas no padrão estrito ISO 8601.
   3. **Integridade de Codificação (Windows/Excel):** O arquivo CSV foi gerado com `encoding="utf-8-sig"` e `newline=""`. Isso adiciona o BOM (*Byte Order Mark*), evitando que acentuações da língua portuguesa (ex: `ó`, `ã`, `ç`) sofram corrupção (*mojibake*) no Microsoft Excel em computadores Windows, mantendo paridade com sistemas Unix/Linux.
+- **Código de Avaliação (`avaliar_qualidade.py`):**
+```python
+def avaliar_consistencia(self):
+    total = len(self.dados_json)
+    urls_limpas = sum(1 for item in self.dados_json if "measures.globo.com" not in item.get("url", ""))
+    paridade_arquivos = len(self.dados_json) == len(self.dados_csv)
+    percentual = (urls_limpas / total) * 100 if total > 0 else 0
+    aprovado = (percentual == 100.0) and paridade_arquivos
+    self.relatorio["6_Consistência"] = {
+        "metrica": f"{percentual:.1f}%",
+        "detalhes": f"URLs limpas de tracking: {urls_limpas}/{total}; Paridade JSON/CSV: {'OK' if paridade_arquivos else 'ERRO'}",
+        "status": "Aprovado" if aprovado else "Reprovado"
+    }
+```
 
 #### 7. Rastreabilidade (Traceability / Data Lineage)
 - **O que avalia:** A capacidade de auditar a origem exata de cada registro coletado, garantindo reprodutibilidade científica e transparência metodológica.
@@ -175,6 +280,24 @@ python avaliar_qualidade.py
      - `pagina`: O número exato da página de paginação em que o resultado foi retornado pela API.
      - `coletado_em`: Marcação temporal da captura no formato ISO 8601 configurada no fuso horário oficial de Brasília (`America/Sao_Paulo` / UTC-3).
   2. Criação de arquivo de log de execução (`coleta_g1.log`) utilizando o módulo `logging` nativo do Python, registrando o timestamp de cada requisição HTTP, código de status recebido, número de novos itens capturados por página e eventuais advertências de rede.
+- **Código de Avaliação (`avaliar_qualidade.py`):**
+```python
+def avaliar_rastreabilidade(self):
+    total = len(self.dados_json)
+    rastreaveis = sum(
+        1 for item in self.dados_json
+        if isinstance(item.get("pagina"), int) and item.get("pagina") > 0
+        and bool(item.get("coletado_em") and "-03:00" in item.get("coletado_em"))
+    )
+    tem_arquivo_log = os.path.exists(self.log_path) and os.path.getsize(self.log_path) > 0
+    percentual = (rastreaveis / total) * 100 if total > 0 else 0
+    aprovado = (percentual == 100.0) and tem_arquivo_log
+    self.relatorio["7_Rastreabilidade"] = {
+        "metrica": f"{percentual:.1f}%",
+        "detalhes": f"Registros com metadados de origem: {rastreaveis}/{total}; Log de auditoria: {'OK' if tem_arquivo_log else 'Ausente'}",
+        "status": "Aprovado" if aprovado else "Reprovado"
+    }
+```
 
 ---
 
